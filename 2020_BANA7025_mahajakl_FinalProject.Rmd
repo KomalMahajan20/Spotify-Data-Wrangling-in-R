@@ -1,0 +1,351 @@
+---
+title: "__*Spotify...Music for every mood!*__"
+author: Komal Mahajan, Dikshita Barman
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Wrangling Final Project{.tabset}
+
+
+
+
+![](spotifygenre.png)
+
+
+## **Introduction**
+
+* **Problem Statement:** The dataset for this project is based on a music streaming application, `Spotify`. It contains millions of music tracks across various genres, artists and sentimental factors such as motivation, energy, romance, etc. Our goal is to analyze on the popular genres among the Spotify population and categorize the artists and their famous tracks on the basis of their genre. Moreover, for each sentiment we will observe the most played artists and their tracks. 
+
+* **Motivation for choosing this topic:** Music can reach our feelings and connects people across any boundaries. Our analysis will help people to choose the most popular tracks as per their mood. 
+
+* **Solution:** Our study on the dataset provides us with the key insights on the songs to be played according to one's mood and the artist with the highest no. of songs in each of the six `genres`. 
+
+## **Packages Required**
+
+```{r, message=FALSE, warning=FALSE}
+library(knitr) #displaying an aligned table on the screen
+library(readr) #load .csv file
+library(ggplot2) #visualize the data
+library(dplyr) #manipulate data
+library(tidyr)#tidying the data
+library(DT) #output data in table
+library(GGally) #Visualize the data
+library(plotly) #Visualize the data
+```
+
+We used the following packages to analyze the dataset:
+
+* **tidyverse** : Used in data processing and data transformation as well as for data visualization
+* **readr** : Used for importing data CSV files
+* **knitr** : Used to displaying an aligned table on the screen
+* **ggplot2**: Used to visualize data
+* **dplyr** :Used to manipulate data 
+* **DT**: Used to output data in table
+* **GGally**: Used to visualize correlation among variables
+* **plotly**: Used to visualize distributions of the numerical variables. *Note* - Double-Click on a particular legend to view the graph or distribution of the selected genre
+
+## **Data Preparation**{.tabset}
+
+Steps followed to prepare data for analysis:
+
+### **Data Understanding**
+
+**Data Import**
+
+The spotify_songs data file can be downloaded directly from the [Spotify](https://www.dropbox.com/sh/qj0ueimxot3ltbf/AACzMOHv7sZCJsj3ErjtOG7ya?dl=1). This dataset comes originally from [spotifyr package](https://www.rcharlie.com/spotifyr/). This package was authored to make it easily accesible for anyone to get their own data or general metadata around songs from the Spotify's API. 
+
+```{r, results='hide', message=FALSE, warning=FALSE}
+#Loading the dataset
+sp_data <- read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-01-21/spotify_songs.csv')
+```
+
+**Data Description**
+
+```{r, message=FALSE, warning=FALSE}
+#Display the dimensions of raw dataset
+dim(sp_data)
+```
+The dataset contains 32833 observations and 23 variables. Names of the variables are below:
+
+```{r, message=FALSE, warning=FALSE}
+colnames(sp_data)
+```
+
+Not all of the 23 variables are relevant for our analysis. Firstly, There are these 7 variables which should better be cast in factor datatypes for better analysis results.
+```{r}
+#Checking the datatype of the columns
+lapply(sp_data, typeof)
+```
+
+The variable "playlist_genre" contains 6 distinct categories and "playlist_subgenre" contains 24 distinct categories respectively, so it converted to factor type it would be easier to analyze. Hence, We will prune our variables' list and explore the dataset further with respect to these variables only.
+
+```{r, message=FALSE, warning=FALSE}
+#Converting the non-numerical variables into categorical variables
+sp_data$track_id <- as.factor(sp_data$track_id)
+sp_data$track_artist <- as.factor(sp_data$track_artist)
+sp_data$track_name <- as.factor(sp_data$track_name)
+sp_data$track_album_name <- as.factor(sp_data$track_album_name)
+sp_data$playlist_name <- as.factor(sp_data$playlist_name)
+sp_data$playlist_genre <- as.factor(sp_data$playlist_genre)
+sp_data$playlist_subgenre <- as.factor(sp_data$playlist_subgenre)
+```
+
+```{r, message=FALSE, warning=FALSE}
+#Selecting the interesting variables
+sp_songs <- select(sp_data,-c(5,7,9,14:19,22))
+dim(sp_songs)
+colnames(sp_songs)
+```
+Now, we have shorten our variables list from 23 to 13. The metadata for these variables is provided below: 
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+#Displaying the selected column and their descriptions
+var <- names(sp_songs)
+description <-c("Song unique ID","Song Name",
+                  "Song Artist","Song Popularity (0-100) where higher is better",
+                  "Song album name",
+                  "Name of playlist","Playlist genre",
+                  "Playlist subgenre",
+                  "Danceability describes how suitable a track is for dancing based on a combination of musical elements including tempo, rhythm stability, beat strength, and overall regularity. A value of 0.0 is least danceable and 1.0 is most danceable.",
+                  "Energy is a measure from 0.0 to 1.0 and represents a perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy. For example, death metal has high energy, while a Bach prelude scores low on the scale. Perceptual features contributing to this attribute include dynamic range, perceived loudness, timbre, onset rate, and general entropy.",
+                "Detects the presence of an audience in the recording. Higher liveness values represent an increased probability that the track was performed live. A value above 0.8 provides strong likelihood that the track is live.",
+                  "A measure from 0.0 to 1.0 describing the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry).",
+                  "Duration of song in milliseconds")
+table <- as_data_frame(cbind(var,description))
+names(table) <- c("Variable Name","Description")
+kable(table)
+```
+
+
+### **Data Cleaning**
+
+```{r, message=FALSE, warning=FALSE}
+#Dimensions of the updated dataset
+dim(sp_songs)
+```
+
+**Renaming the columns**:
+
+```{r, message=FALSE, warning=FALSE}
+sp_songs = sp_songs %>% rename(track_danceability = danceability, 
+                               track_energy_level = energy, 
+                               live_performed = liveness,  
+                               musical_positivity = valence, 
+                               song_duration = duration_ms
+                               )
+```
+
+
+**Finding missing values**
+
+```{r, message=FALSE, warning=FALSE}
+#Finding missing values
+missing = colSums(is.na(sp_songs))
+missing
+```
+
+There are 5 missing values each in track_name, track_artist and track_album_name. These corresppond to same 5 observations which are not even 1% of the entire dataset. We do not want to keep the missing values and hence we will remove the rows.
+
+```{r, message=FALSE, warning=FALSE}
+sp_songs = na.omit(sp_songs)
+#Dimensions of the cleansed dataset
+dim(sp_songs)
+```
+Our final dataset after removing missing observations contains 32828 observations with 13 variables.
+
+**Table View of the dataset:**
+```{r, message=FALSE, warning=FALSE}
+datatable(head(sp_songs,100),extensions = 'FixedColumns', options = list(scrollX = TRUE, scrollY = "400px",fixedColumns= TRUE))
+```
+
+### **Data Exploration**
+
+**Structure of the data**
+```{r, message=FALSE, warning=FALSE}
+str(sp_songs)
+```
+The cleansed data contains information about tracks, artists, genre, duration and other relevant information. We know there are 7 categorical and 6 numerical variables now. 
+
+
+**Inference:**
+
+
+It was the right decision to convert all the non-numerical variables to factors as the columns like track_id(song unique ID) also contains duplicate values showing us that the total categories in "track_id" is less than the total number of observations.
+These 7 categorical variables will be used to perform further analysis in determining the specific results by grouping the values together.
+There are 3 variables which have adequate number of categories that can be used to discern the insights with better interpretability.
+  
+  1. Playlist_genre - 6
+  2. Playlist_subgenre - 24, and
+  3. Playlist_name - 449 categories
+
+
+**Summary statistics of variables**
+
+```{r, message=FALSE, warning=FALSE}
+#Summary of the data 
+summary(sp_songs)
+```
+The above summary statistics shows that there are no more missing values present in the dataset. The results on the categorical columns provided above are conforming with our inferences mentioned earlier.
+
+**Inference on numerical variables:**
+```{r, warning=FALSE, message=FALSE}
+#Summary Statistics Table 
+data.table::data.table(
+  Variable.Name = c("track_popularity",
+                    "track_danceability","track_energy_level","live_performed",
+                    "musical_positivity","song_duration(in min)"),
+            Min = c(0, 0, 0.000175, 0, 0, 0.067),
+           Mean = c(42.48, 0.65, 0.698, 0.19, 0.51, 3.76),
+         Medium = c(45, 0.67, 0.721, 0.13, 0.51, 3.6),
+            Max = c(100, 0.98, 1, 0.99, 0.99, 8.63)
+)
+```
+  *Higher the metric, better the song!*
+  
+1. It can be deduced that almost 50% of the data has popularity metric values = 45, 100 being the maximum.
+2. Around 50% of the tracks has 67% danceability score(0-1) making the tracks suitable for dancing.
+3. Around 50% of the tracks has 72% energy measure(0-1) implying energetic tracks that feel fast, loud and noisy.
+4. The statistic for live_performed variable is distributed more towards the left range(0-1) which implies that not many tracks available in our dataset were performed live.
+5. The musical positiveness measure has mean and median both equal to 0.51 which means that majority of the tracks are almost balanced in terms of valence.
+6. 50% of the tracks in the dataset are of around 3.6 minutes in duration.
+
+
+## **Exploratory Data Analysis**
+
+```{r, warning=FALSE, message=FALSE}
+(count <- sp_songs %>% count(playlist_genre) %>% knitr::kable())
+```
+
+**Inference:** The table shows us the count of songs in each genre.
+
+```{r,warning=FALSE}
+ggcorr(sp_songs,label = TRUE)
+```
+
+**Inference:** We can see from the above graph that there is no significant correlation among the variables. track_danceability and musical positivity has the higest correlation of 0.3.
+
+```{r, warning = FALSE}
+green <- "#1ed760"
+yellow <- "#e7e247"
+pink <- "#ff6f59"
+blue <- "#17bebb"
+orange <- "#ffa500"
+grey <- "#808080"
+
+#Plotting density distributions
+#1. Danceability feature
+viz1 <- ggplot(sp_songs, aes(x=track_danceability, fill=playlist_genre,
+                    text = paste(playlist_genre)))+
+  geom_density(alpha=0.7, color=NA)+
+  scale_fill_manual(values=c(green, yellow, grey, blue, orange, pink))+
+  labs(x="Danceability", y="Density") +
+  guides(fill=guide_legend(title="Genres"))+
+  theme_minimal()+
+  ggtitle("Distribution of Danceability Data")
+
+ggplotly(viz1, tooltip=c("text"))
+```
+**Inference:** All the genres are right-skewed except for the rock genre which is normally distributed. We can also infer that the latin genre has the highest density.
+
+```{r,warning=FALSE}
+#1. Popularity feature
+viz2 <- ggplot(sp_songs, aes(x=track_popularity, fill=playlist_genre,
+                    text = paste(playlist_genre)))+
+  geom_density(alpha=0.7, color=NA)+
+  scale_fill_manual(values=c(green, yellow, grey, blue, orange, pink))+
+  labs(x="Tracks popularity score", y="Density") +
+  guides(fill=guide_legend(title="Genres"))+
+  theme_minimal()+
+  ggtitle("Distribution of Tracks popularity")
+
+ggplotly(viz2, tooltip=c("text"))
+```
+**Inference** - It can be visualized that the tracks in different genres do have songs with low popularity but there are majority of tracks which are well distributed from the range of 15-100.
+
+```{r,warning=FALSE}
+gen_valence <- sp_songs %>%
+  group_by(playlist_genre)%>%
+  mutate(max=max(musical_positivity))%>%
+  mutate(min=min(musical_positivity))%>%
+  select(playlist_genre, max, min)%>%
+  unique()
+
+viz3 <- plot_ly(gen_valence, color = I("gray80"),  
+              hoverinfo = 'text') %>%
+  add_segments(x = ~max, xend = ~min, y = ~playlist_genre, yend = ~playlist_genre, showlegend = FALSE) %>%
+  add_markers(x = ~max, y = ~playlist_genre, name = "High Positivity", color = I(pink), text=~paste('Max Valence: ', max)) %>%
+  add_markers(x = ~min, y = ~playlist_genre, name = "Low Positivity", color = I(blue), text=~paste('Min Valence: ', min))%>%
+  layout(
+    title = "Genres' Positivity Range",
+    xaxis = list(title = "Positivity Level"),
+    yaxis= list(title=""))
+
+ggplotly(viz3)
+```
+**Inference:** The above graph provides us with the musical positivity in each genre and we can infer that rock and r&b has highest posiitvity while latin and rock has lowest positivity.
+
+```{r,warning=FALSE}
+gen_energy <- sp_songs %>%
+  group_by(playlist_genre)%>%
+  mutate(max=max(track_energy_level))%>%
+  mutate(min=min(track_energy_level))%>%
+  select(playlist_genre, max, min)%>%
+  unique()
+
+viz4 <- plot_ly(gen_energy, color = I("gray80"),  
+              hoverinfo = 'text') %>%
+  add_segments(x = ~max, xend = ~min, y = ~playlist_genre, yend = ~playlist_genre, showlegend = FALSE) %>%
+  add_markers(x = ~max, y = ~playlist_genre, name = "Maximum Energy Level Value", color = I(pink), text=~paste('Max Energy Level: ', max)) %>%
+  add_markers(x = ~min, y = ~playlist_genre, name = "Minimum Energy Level Value", color = I(blue), text=~paste('Min Energy Level: ', min))%>%
+  layout(
+    title = "Genres' Energy Level Range",
+    xaxis = list(title = "Energy Level"),
+    yaxis= list(title=""))
+
+ggplotly(viz4)
+```
+**Inference:** The above graph provides us with the energy level in each genre and we can infer that pop and latin has lowest energy level while all the genres are max at energy level. 
+
+```{r,warning=FALSE,message=FALSE}
+sp_most_played <- sp_songs %>% group_by(playlist_genre) %>% count(track_artist) %>% arrange(-n) %>% top_n(1)
+datatable(sp_most_played)
+```
+**Inference:**: The above table gives us the singer with the maximum of tracks and the sum of the in each genre.
+
+
+```{r,warning=FALSE, message= FALSE}
+#Finding the most popular track and its artist as per mood
+final <- sp_songs %>%
+     group_by(playlist_genre, playlist_subgenre) %>%
+  select(c(2:4,9,10,12)) %>%
+     slice(which.max(track_popularity)) %>%
+  arrange(-track_popularity)
+
+datatable(final[with(final, order(playlist_genre, playlist_subgenre)),])
+```
+**Inference:**: The above table provides us with the most popular songs and artists for each genre and subgenres within the genres.
+
+
+## **Conclusion**
+
+```{r, echo=FALSE}
+songs_mood <- data.table::data.table(
+       Mood = c("edm","latin","pop","r&b","rap","rock"),
+       Dancing_Vibes = c("Ride it by Regard", "Dance Monkeys by Tones and I", "Dance Monkeys by Tones and I","I Wanna Dance with Somebody by Whitney Houston","The Box by Roddy Ricch","bad guy by Billie Eilish"),
+       Energy_Blast = c("Ride it by Regard", "Tusa by Karol G", "Blinding Lights by The Weekend","I Wanna Dance with Somebody by Whitney Houston","Tusa by Karol G","Highway to Hell by AC/DC"),
+       Positive_soul = c("Ride it by Regard", "Tusa by Karol G", "Tusa by Karol G","I Wanna Dance with Somebody by Whitney Houston","Closer by The Chainsmokers","The Less I Know The Better by Tale Impalau"))
+
+datatable(songs_mood)
+```
+
+**Inference:** 
+
+Based on your mood, choose the most popular track in each genre from the table above.
+You have your __*Spotify...Music for every mood!*__
+
+
+
